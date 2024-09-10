@@ -14,7 +14,9 @@ description: |
       required: true
 
 runs:
+  using: "composite"
   steps:
+    - uses: actions/checkout@v4
     - name: Restore BoringSSL cache
       id: cache-boringssl
       uses: actions/cache@v4
@@ -23,16 +25,18 @@ runs:
           boringssl/build/crypto/libcrypto.a
           boringssl/build/ssl/libssl.a
           boringssl/include
-        key: ${{ inputs.os }}-boringssl-{{ inputs.boringssl_version }}
+        key: ${{ inputs.os }}-boringssl-${{ inputs.boringssl_version }}
 
     - id: settings
       if: |
         steps.cache-boringssl.outputs.cache-hit != 'true'
+      shell: bash
       run: |
         echo 'needs-build=true' >> $GITHUB_OUTPUT
 
     - name: Linux setup
       if: runner.os == 'Linux' && steps.settings.outputs.needs-build == 'true'
+      shell: bash
       run: |
         sudo apt-get update
         sudo apt-get install \
@@ -49,6 +53,7 @@ runs:
 
     - name: MacOS setup
       if: runner.os == 'macOS' && steps.settings.outputs.needs-build == 'true'
+      shell: bash
       run: |
         brew install \
           autoconf \
@@ -58,13 +63,14 @@ runs:
 
     - name: Build BoringSSL
       if: steps.cache-boringssl.outputs.cache-hit != 'true'
+      shell: bash
       run: |
-        mkdir libressl
-        cd libressl
+        mkdir boringssl
+        cd boringssl
         git init
         git remote add origin https://boringssl.googlesource.com/boringssl
-        git fetch origin --depth 1 {{ inputs.boringssl_version }}
-        git checkout {{ inputs.boringssl_version }}
+        git fetch origin --depth 1 ${{ inputs.boringssl_version }}
+        git checkout ${{ inputs.boringssl_version }}
         mkdir build
         cd build
         cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON ..
