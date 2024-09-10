@@ -1,0 +1,71 @@
+name: 'Build BoringSSL'
+description: |
+  Build BoringSSL.
+
+  inputs:
+    boringssl_version:
+      description: |
+        The version of BoringSSL.
+      required: true
+
+    os:
+      description: |
+        The OS name such as "ubuntus-22.04", "macos-14", etc.
+      required: true
+
+runs:
+  steps:
+    - name: Restore BoringSSL cache
+      id: cache-boringssl
+      uses: actions/cache@v4
+      with:
+        path: |
+          boringssl/build/crypto/libcrypto.a
+          boringssl/build/ssl/libssl.a
+          boringssl/include
+        key: ${{ inputs.os }}-boringssl-{{ inputs.boringssl_version }}
+
+    - id: settings
+      if: |
+        steps.cache-boringssl.outputs.cache-hit != 'true'
+      run: |
+        echo 'needs-build=true' >> $GITHUB_OUTPUT
+
+    - name: Linux setup
+      if: runner.os == 'Linux' && steps.settings.outputs.needs-build == 'true'
+      run: |
+        sudo apt-get update
+        sudo apt-get install \
+          g++-12 \
+          clang-15 \
+          autoconf \
+          automake \
+          autotools-dev \
+          libtool \
+          pkg-config \
+          libelf-dev \
+          cmake \
+          cmake-data
+
+    - name: MacOS setup
+      if: runner.os == 'macOS' && steps.settings.outputs.needs-build == 'true'
+      run: |
+        brew install \
+          autoconf \
+          automake \
+          pkg-config \
+          libtool
+
+    - name: Build BoringSSL
+      if: steps.cache-boringssl.outputs.cache-hit != 'true'
+      run: |
+        mkdir libressl
+        cd libressl
+        git init
+        git remote add origin https://boringssl.googlesource.com/boringssl
+        git fetch origin --depth 1 {{ inputs.boringssl_version }}
+        git checkout {{ inputs.boringssl_version }}
+        mkdir build
+        cd build
+        cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON ..
+        make -j"$(nproc 2> /dev/null || sysctl -n hw.ncpu)"
